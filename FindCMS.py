@@ -2,20 +2,20 @@ import pandas as pd
 import builtwith
 import ssl
 from collections import Counter
-import concurrent.futures
+import threading
 
 # Disable SSL verification (use with caution)
 ssl._create_default_https_context = ssl._create_unverified_context
 
-def detect_cms(url):
+def detect_cms(url, results, index):
     try:
         technologies = builtwith.builtwith(url)
         if 'cms' in technologies:
-            return ', '.join(technologies['cms'])
+            results[index] = ', '.join(technologies['cms'])
         else:
-            return "CMS not detected"
+            results[index] = "CMS not detected"
     except Exception as e:
-        return f"Error: {e}"
+        results[index] = f"Error: {e}"
 
 def read_ods(file_path):
     df = pd.read_excel(file_path, engine="odf", header=None)
@@ -23,13 +23,8 @@ def read_ods(file_path):
 
 def write_ods(input_file, output_file, cms_results):
     df = pd.read_excel(input_file, engine="odf", header=None)
-    df[8] = cms_results + [""] * (len(df) - len(cms_results))
+    df[9] = cms_results + [""] * (len(df) - len(cms_results))  # Writing to 9th column (index 8)
     df.to_excel(output_file, index=False, header=False, engine="odf")
-
-def process_url(url, index):
-    cms_result = detect_cms(url)
-    print(f"URL {index} ({url}): {cms_result}")  # Print URL with its sequence number and CMS result
-    return cms_result
 
 # File paths
 input_file = 'lista.ods'
@@ -38,14 +33,21 @@ output_file = 'lista-result.ods'
 # Read URLs from the second column
 urls = read_ods(input_file)
 
-# Detect CMS for each URL concurrently
-cms_results = []
-with concurrent.futures.ThreadPoolExecutor() as executor:
-    # Create a future for each URL
-    future_to_url = {executor.submit(process_url, url, index): index for index, url in enumerate(urls, start=1)}
+# Detect CMS for each URL and print the URL with its sequence number and CMS result
+cms_results = [None] * len(urls)
+for index, url in enumerate(urls, start=1):
+    print(f"Checking URL {index}: {url}")
 
-    for future in concurrent.futures.as_completed(future_to_url):
-        cms_results.append(future.result())
+    # Start the thread to detect CMS
+    thread = threading.Thread(target=detect_cms, args=(url, cms_results, index-1))
+    thread.start()
+    thread.join(timeout=60)  # Wait for 60 seconds
+
+    if cms_results[index-1] is None:
+        cms_results[index-1] = "Skipped due to timeout"
+        print(f"Skipped URL {index} due to timeout")
+    else:
+        print(f"Result for URL {index}: {cms_results[index-1]}")  # Print CMS result
 
 # Write results to a new ODS file
 write_ods(input_file, output_file, cms_results)
