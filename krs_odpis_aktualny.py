@@ -20,29 +20,50 @@ def create_database():
 def insert_krs_data(krs_number, registry_type, data):
     conn = sqlite3.connect('krs_records.db')
     cursor = conn.cursor()
-    current_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")  # Convert timezone-aware datetime to string
+    current_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute('''
         INSERT INTO krs_data (krs_number, registry_type, data, timestamp) VALUES (?, ?, ?, ?)
     ''', (krs_number, registry_type, json.dumps(data), current_timestamp))
     conn.commit()
     conn.close()
 
+def get_latest_entry(krs_number, registry_type):
+    conn = sqlite3.connect('krs_records.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT data FROM krs_data 
+        WHERE krs_number = ? AND registry_type = ?
+        ORDER BY timestamp DESC
+        LIMIT 1
+    ''', (krs_number, registry_type))
+    result = cursor.fetchone()
+    conn.close()
+    return json.loads(result[0]) if result else None
+
+def has_data_changed(new_data, old_data):
+    # Compare the JSON data after normalization
+    return json.dumps(new_data, sort_keys=True, ensure_ascii=False) != json.dumps(old_data, sort_keys=True, ensure_ascii=False)
+
 def download_current_krs_record(krs_numbers):
     for krs_number in krs_numbers:
-        record_found = False
-        registries = ['P', 'S']
-        for registry in registries:
+        for registry in ['P', 'S']:
             api_url = f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs_number}?rejestr={registry}&format=json"
             response = requests.get(api_url)
 
             if response.status_code == 200:
-                insert_krs_data(krs_number, registry, response.json())
-                print(f"Current KRS record for {krs_number} in registry {registry} has been downloaded and saved to the database.")
-                record_found = True
-                break
+                new_data = response.json()
+                old_data = get_latest_entry(krs_number, registry)
 
-        if not record_found:
-            print(f"Warning: No record found in any registry for KRS {krs_number}.")
+                if not old_data:
+                    insert_krs_data(krs_number, registry, new_data)
+                    print(f"New KRS record for {krs_number} in registry {registry} has been downloaded and saved.")
+                elif has_data_changed(new_data, old_data):
+                    insert_krs_data(krs_number, registry, new_data)
+                    print(f"Updated KRS record for {krs_number} in registry {registry} found. Changes saved.")
+                else:
+                    print(f"No changes for {krs_number} in registry {registry}. Record remains unchanged.")
+            else:
+                print(f"Warning: No record found in registry {registry} for KRS {krs_number}.")
 
 # Initialize database and tables
 create_database()
