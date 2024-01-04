@@ -41,8 +41,13 @@ def get_latest_entry(krs_number, registry_type):
     return json.loads(result[0]) if result else None
 
 def has_data_changed(new_data, old_data):
-    # Compare the JSON data after normalization
-    return json.dumps(new_data, sort_keys=True, ensure_ascii=False) != json.dumps(old_data, sort_keys=True, ensure_ascii=False)
+    new_podmioty = new_data.get('odpis', {}).get('dane', {})
+    old_podmioty = old_data.get('odpis', {}).get('dane', {})
+
+    for key in new_podmioty.keys():
+        if key not in old_podmioty or json.dumps(new_podmioty[key], sort_keys=True, ensure_ascii=False) != json.dumps(old_podmioty[key], sort_keys=True, ensure_ascii=False):
+            return True
+    return False
 
 def download_current_krs_record(krs_numbers):
     for krs_number in krs_numbers:
@@ -54,12 +59,9 @@ def download_current_krs_record(krs_numbers):
                 new_data = response.json()
                 old_data = get_latest_entry(krs_number, registry)
 
-                if not old_data:
+                if not old_data or has_data_changed(new_data, old_data):
                     insert_krs_data(krs_number, registry, new_data)
-                    print(f"New KRS record for {krs_number} in registry {registry} has been downloaded and saved.")
-                elif has_data_changed(new_data, old_data):
-                    insert_krs_data(krs_number, registry, new_data)
-                    print(f"Updated KRS record for {krs_number} in registry {registry} found. Changes saved.")
+                    print(f"New or updated KRS record for {krs_number} in registry {registry} has been downloaded and saved.")
                 else:
                     print(f"No changes for {krs_number} in registry {registry}. Record remains unchanged.")
             else:
