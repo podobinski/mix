@@ -12,6 +12,9 @@ def oblicz_rate_annuitetowa(kwota, oprocentowanie, liczba_miesiecy):
     miesieczne_oprocentowanie = oprocentowanie / 12
     return kwota * miesieczne_oprocentowanie / (1 - (1 + miesieczne_oprocentowanie) ** -liczba_miesiecy)
 
+def dni_od_poprzedniej_splaty(data_obecna, data_poprzednia):
+    return (data_obecna - data_poprzednia).days
+
 def symulacja_splaty_annuitetowej():
     kwota = Decimal(input("Podaj kwotę kredytu: ").replace(',', '.'))  # Akceptowanie przecinka jako separatora dziesiętnego
     oprocentowanie = Decimal(input("Podaj stopę oprocentowania (w procentach): ").replace(',', '.')) / 100
@@ -24,12 +27,12 @@ def symulacja_splaty_annuitetowej():
     harmonogram = []
     saldo = kwota
     data_splaty = ostatni_dzien_miesiaca(data_wyplaty)
+    data_poprzedniej_splaty = data_wyplaty
 
     for i in range(liczba_miesiecy):
-        rata_odsetkowa = (saldo * oprocentowanie / 12).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        dni_miedzy_splatami = dni_od_poprzedniej_splaty(data_splaty, data_poprzedniej_splaty)
+        rata_odsetkowa = (saldo * oprocentowanie * dni_miedzy_splatami / 365).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         
-        saldo_przed_splata = saldo  # Przypisanie bieżącego salda jako saldo przed spłatą
-
         if i == liczba_miesiecy - 1:
             rata_kapitalowa = saldo
             saldo_po_splacie = Decimal('0.00')
@@ -41,13 +44,14 @@ def symulacja_splaty_annuitetowej():
 
         harmonogram.append([
             data_splaty.strftime("%Y-%m-%d"),
-            saldo_przed_splata,  # Użycie zaktualizowanej zmiennej
+            saldo,  # Użycie bieżącego salda
             rata_kapitalowa,
             rata_odsetkowa,
             laczna_rata,
-            saldo_po_splacie  # Użycie zaktualizowanej zmiennej
+            saldo_po_splacie
         ])
 
+        data_poprzedniej_splaty = data_splaty
         saldo = saldo_po_splacie  # Aktualizacja salda dla następnego cyklu
 
         data_wyplaty = data_splaty + datetime.timedelta(days=1)
