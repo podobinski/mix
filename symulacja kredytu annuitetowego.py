@@ -70,13 +70,13 @@ def symulacja_splaty_annuitetowej():
         rozjazd = new_rozjazd
         rozjazd_bezwzgledny = new_rozjazd_bezwzgledny
 
-    df = pd.DataFrame(harmonogram, columns=["Data", "Saldo przed spłatą", "Rata kapitału", "Rata odsetek", "Łączna rata", "Saldo po spłacie"])
+    df = pd.DataFrame(harmonogram, index=range(1, liczba_miesiecy+1), columns=["Data", "Saldo przed spłatą", "Rata kapitału", "Rata odsetek", "Łączna rata", "Saldo po spłacie"])
     pd.set_option('display.max_rows', None)
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', None)
     pd.set_option('display.max_colwidth', None)
 
     print(df)
-    df.to_excel("symulacja_annuitetowa.xlsx", index=False)
+    df.to_excel("symulacja_annuitetowa.xlsx", index_label="Nr raty")
 
 symulacja_splaty_annuitetowej()
